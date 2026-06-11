@@ -37,9 +37,20 @@ python notebooks/01_run_pose.py path/to/your_climb.mp4
 ```
 This runs pose on a real video and dumps keypoints — your first end-to-end signal.
 
+## Quick start (the web app, mock data)
+```bash
+cd apps/web
+npm install
+npm run dev          # http://localhost:3000
+```
+The full v1 flow is demoable today against a mock data layer: sign-in (stubbed),
+upload, simulated pipeline, and a canvas keypoint-replay report. Swap points for
+the real backend are marked in `src/lib/mockApi.ts` (API) and `src/lib/auth.tsx`
+(Google OAuth via Supabase).
+
 ## Repo layout
 ```
-apps/web/         Next.js frontend (upload, results, overlay)        [later]
+apps/web/         🟢 Next.js frontend (upload, results, overlay) — BUILT, runs on mock data
 services/api/     FastAPI: jobs, presigned URLs, auth                [later]
 services/worker/  RQ worker entrypoint                               [later]
 ml/pose/          🟢 PoseEstimator interface + MediaPipe impl
