@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Data / models / media (keep the repo light)
+*.mp4
+*.mov
+*.avi
+data/
+models/
+out/
+*.json.keypoints
+
+# Node / Next.js
+node_modules/
+.next/
+dist/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Planning / Claude docs (kept local for now; README.md stays tracked)
+CLAUDE.md
+PLAN.md
+BREAK.md
