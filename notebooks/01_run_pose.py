@@ -7,8 +7,8 @@ shape of what pose gives you (that intuition drives every feature you'll build).
 Usage:
     python notebooks/01_run_pose.py path/to/climb.mp4
 
-It prints per-frame detection stats and dumps keypoints to out/keypoints.json so
-later stages can consume them WITHOUT re-running pose (the two-stage design from
+It prints per-frame detection stats and dumps keypoints to out/<video-name>.keypoints.json
+so later stages can consume them WITHOUT re-running pose (the two-stage design from
 CLAUDE.md: perception is expensive -> cache it).
 """
 from __future__ import annotations
@@ -48,13 +48,15 @@ def main(video_path: str) -> None:
 
     estimator.close()
     os.makedirs("out", exist_ok=True)
-    with open("out/keypoints.json", "w") as f:
+    stem = os.path.splitext(os.path.basename(video_path))[0]
+    out_path = f"out/{stem}.keypoints.json"
+    with open(out_path, "w") as f:
         json.dump({"video": video_path, "frames": frames_out}, f)
 
     rate = (detected / total * 100) if total else 0.0
     print(f"Sampled frames: {total} | pose detected: {detected} ({rate:.0f}%)")
     print(f"Landmarks per frame: {len(frames_out[0]['keypoints']) if frames_out else 0}")
-    print("Wrote out/keypoints.json  <-- next stages read THIS, not the video.")
+    print(f"Wrote {out_path}  <-- next stages read THIS, not the video.")
 
 
 if __name__ == "__main__":
