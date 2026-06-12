@@ -4,8 +4,9 @@ mediapipe>=0.10.9        # pose estimation (33 landmarks), CPU-friendly
 opencv-python>=4.9.0     # video decode / frame extraction
 numpy>=1.26.0            # all feature math lives on ndarrays
 
-# testing
+# testing / data inspection
 pytest>=8.0.0
+matplotlib>=3.8.0        # sandbox plots (visibility histograms etc.), not shipped
 
 # NOTE: web stack (FastAPI, rq, redis, supabase) is added when we build that layer.
 # Pin RTMPose/rtmlib later if/when we upgrade the PoseEstimator.
