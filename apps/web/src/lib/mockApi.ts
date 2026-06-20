@@ -6,8 +6,8 @@
  * localStorage; results are regenerated deterministically from each
  * climb's seed (see synth.ts) so nothing heavy is stored.
  *
- * SWAP POINT: when services/api exists, implement `BetaApi` against it
- * and change the export at the bottom of this file.
+ * The real FastAPI-backed client lives in realApi.ts; the swap happens in
+ * api.ts via NEXT_PUBLIC_API_URL. Pages import from "@/lib/api".
  */
 
 import { BetaApi, Climb, ClimbResults, JobStage } from "./types";
@@ -23,7 +23,7 @@ const STAGE_PLAN: Array<[JobStage, number, number]> = [
   ["analysis", 1800, 1.0],
 ];
 
-const DEMO_CLIMBS: Climb[] = [
+export const DEMO_CLIMBS: Climb[] = [
   {
     id: "demo-cave",
     title: "Cave sit-start, orange tape",

@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/mockApi";
+import { api } from "@/lib/api";
 import { Climb, ClimbResults } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import GoogleButton from "@/components/GoogleButton";
@@ -27,7 +27,7 @@ export default function Landing() {
 
   return (
     <div className="overflow-x-clip">
-      {/* ── hero / the cover ── */}
+      {/* â”€â”€ hero / the cover â”€â”€ */}
       <section className="contours relative">
         <div className="mx-auto grid max-w-6xl items-start gap-14 px-5 pb-24 pt-16 md:grid-cols-[1.05fr_0.95fr] md:pt-20">
           <div>
@@ -47,7 +47,7 @@ export default function Landing() {
               style={{ animationDelay: "180ms" }}
             >
               Film your boulder and upload it. Beta traces your body through
-              every frame and hands back a marked-up topo of the climb —
+              every frame and hands back a marked-up topo of the climb â€”
               where your hips drifted, where your arms stayed bent, where you
               hesitated below the crux.
             </p>
@@ -61,7 +61,7 @@ export default function Landing() {
                   href="/climbs"
                   className="inline-flex items-center gap-3 bg-ink px-6 py-3.5 font-medium text-paper transition-colors hover:bg-red-deep"
                 >
-                  Your climbs <span className="font-mono text-xs">→</span>
+                  Your climbs <span className="font-mono text-xs">â†’</span>
                 </Link>
               ) : (
                 <GoogleButton />
@@ -70,7 +70,7 @@ export default function Landing() {
                 href="/climbs/demo-cave"
                 className="caption border-b border-ink-faint pb-0.5 text-base transition-colors hover:border-red hover:text-red"
               >
-                or leaf through a sample plate →
+                or leaf through a sample plate â†’
               </Link>
             </div>
 
@@ -81,14 +81,14 @@ export default function Landing() {
             >
               <p className="tag text-ink-faint">in this volume</p>
               <p className="caption mt-2 text-base leading-relaxed">
-                I. Technique feedback &nbsp;·&nbsp; II. Hold &amp; route
-                detection&thinsp;* &nbsp;·&nbsp; III. Beta generation&thinsp;*
+                I. Technique feedback &nbsp;Â·&nbsp; II. Hold &amp; route
+                detection&thinsp;* &nbsp;Â·&nbsp; III. Beta generation&thinsp;*
               </p>
               <p className="tag mt-2 text-ink-faint">* forthcoming</p>
             </div>
           </div>
 
-          {/* plate I — live replay */}
+          {/* plate I â€” live replay */}
           <figure className="rise md:mt-2" style={{ animationDelay: "300ms" }}>
             <div className="print-rule" />
             <div className="relative mt-3 aspect-[3/4] max-h-[540px] w-full border border-ink/70 bg-card p-2 shadow-[6px_6px_0_rgba(28,25,20,0.08)]">
@@ -102,14 +102,14 @@ export default function Landing() {
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center bg-paper-deep">
-                    <span className="tag text-ink-faint">inking the plate…</span>
+                    <span className="tag text-ink-faint">inking the plateâ€¦</span>
                   </div>
                 )}
               </div>
             </div>
             <figcaption className="mt-3 flex items-baseline justify-between">
               <span className="caption text-sm">
-                Plate I — skeleton replay from stored keypoints
+                Plate I â€” skeleton replay from stored keypoints
               </span>
               <span className="tag text-ink-faint">fig. 1</span>
             </figcaption>
@@ -117,15 +117,15 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── legend — how to read the plates ── */}
+      {/* â”€â”€ legend â€” how to read the plates â”€â”€ */}
       <div className="border-y border-ink/50 bg-paper-deep">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-10 gap-y-2 px-5 py-3">
           <span className="tag text-ink-dim">legend</span>
           {[
-            ["—", "skeleton, traced in ink"],
-            ["– –", "center of mass (route line)"],
-            ["○", "holds on route"],
-            ["▲", "margin note"],
+            ["â€”", "skeleton, traced in ink"],
+            ["â€“ â€“", "center of mass (route line)"],
+            ["â—‹", "holds on route"],
+            ["â–²", "margin note"],
           ].map(([sym, label]) => (
             <span key={label} className="flex items-baseline gap-2.5">
               <span className="font-mono text-sm text-red">{sym}</span>
@@ -135,7 +135,7 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* ── how to read this book ── */}
+      {/* â”€â”€ how to read this book â”€â”€ */}
       <section className="mx-auto max-w-6xl px-5 py-24">
         <p className="tag text-red">how to read this book</p>
         <h2 className="display mt-3 text-4xl text-ink md:text-5xl">
@@ -146,12 +146,12 @@ export default function Landing() {
             {
               n: "1",
               title: "Film it",
-              body: "Static camera, full body in frame, side or ¾ angle. Thirty seconds of footage is plenty — the film guide shows the setup.",
+              body: "Static camera, full body in frame, side or Â¾ angle. Thirty seconds of footage is plenty â€” the film guide shows the setup.",
             },
             {
               n: "2",
               title: "Upload it",
-              body: "Your video goes straight to storage and lands in the processing queue. Pose estimation runs on every frame — about a minute.",
+              body: "Your video goes straight to storage and lands in the processing queue. Pose estimation runs on every frame â€” about a minute.",
             },
             {
               n: "3",
@@ -170,7 +170,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── the volumes ── */}
+      {/* â”€â”€ the volumes â”€â”€ */}
       <section className="border-t hairline bg-card/70">
         <div className="mx-auto max-w-6xl px-5 py-24">
           <p className="tag text-red">the volumes</p>
@@ -184,7 +184,7 @@ export default function Landing() {
                 title: "Technique feedback",
                 status: "in print",
                 live: true,
-                body: "Pose → biomechanics → timestamped coaching. The volume you're holding.",
+                body: "Pose â†’ biomechanics â†’ timestamped coaching. The volume you're holding.",
               },
               {
                 v: "Vol. II",
@@ -216,7 +216,7 @@ export default function Landing() {
                 <p className="flex-1 text-sm text-ink-dim">{p.body}</p>
                 <span className={`tag ${p.live ? "text-red" : "text-ink-faint"}`}>
                   {p.live && (
-                    <span className="pulse-dot mr-2 inline-block text-[9px]">▲</span>
+                    <span className="pulse-dot mr-2 inline-block text-[9px]">â–²</span>
                   )}
                   {p.status}
                 </span>
@@ -226,7 +226,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── honesty — the editor's note ── */}
+      {/* â”€â”€ honesty â€” the editor's note â”€â”€ */}
       <section className="mx-auto max-w-6xl px-5 py-24">
         <div className="max-w-2xl border-l-2 border-red pl-8">
           <p className="tag text-red">editor&apos;s note</p>
@@ -241,14 +241,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── colophon ── */}
+      {/* â”€â”€ colophon â”€â”€ */}
       <footer className="border-t border-ink/50">
         <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-4 px-5 py-8">
           <span className="display text-xl text-ink">
             Beta<span className="text-red">.</span>
           </span>
           <p className="caption text-sm">
-            Set in Fraunces &amp; Karla · climb hard, film steady · v0.1, mock
+            Set in Fraunces &amp; Karla Â· climb hard, film steady Â· v0.1, mock
             data edition
           </p>
         </div>

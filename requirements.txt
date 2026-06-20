@@ -8,5 +8,12 @@ numpy>=1.26.0            # all feature math lives on ndarrays
 pytest>=8.0.0
 matplotlib>=3.8.0        # sandbox plots (visibility histograms etc.), not shipped
 
-# NOTE: web stack (FastAPI, rq, redis, supabase) is added when we build that layer.
+# --- API + worker (services/) ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9  # multipart upload parsing for FastAPI
+rq>=2.0.0                # job queue on Redis
+redis>=5.0.0
+
+# NOTE: supabase (DB/auth/storage) is added when we wire real persistence + OAuth.
 # Pin RTMPose/rtmlib later if/when we upgrade the PoseEstimator.

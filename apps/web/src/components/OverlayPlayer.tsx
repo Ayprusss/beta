@@ -1,10 +1,15 @@
 "use client";
 
 /**
- * Canvas replay of stored keypoints — PLAN.md's "canvas overlay, not a
- * re-encoded video". Today it draws a stylized wall (mock data has no
- * real footage); when the real API lands, the same draw loop renders on
- * top of a <video> element and the wall painter is dropped.
+ * Canvas replay of stored keypoints.
+ *
+ * Two view modes:
+ *   "wire"    — stylised wall background + skeleton (works for demo climbs too)
+ *   "overlay" — real video behind a transparent canvas with skeleton on top
+ *               (only available when videoUrl is provided)
+ *
+ * In overlay mode the <video> element is the time source; timeRef follows
+ * video.currentTime so the skeleton stays locked to the footage.
  */
 
 import {
@@ -29,6 +34,8 @@ interface Props {
   autoPlay?: boolean;
   /** hides controls + shrinks chrome (landing hero) */
   compact?: boolean;
+  /** if provided, enables the overlay mode toggle */
+  videoUrl?: string;
 }
 
 const css = (name: string) =>
@@ -37,18 +44,21 @@ const css = (name: string) =>
     : "";
 
 const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
-  { climb, results, autoPlay = false, compact = false },
+  { climb, results, autoPlay = false, compact = false, videoUrl },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const timeRef = useRef(0);
   const playingRef = useRef(autoPlay);
   const rafRef = useRef(0);
+  const modeRef = useRef<"wire" | "overlay">("wire");
 
   const [playing, setPlaying] = useState(autoPlay);
   const [displayTime, setDisplayTime] = useState(0);
   const [activeFb, setActiveFb] = useState<FeedbackItem | null>(null);
+  const [mode, setMode] = useState<"wire" | "overlay">("wire");
 
   const holds = useMemo(() => generateHolds(climb), [climb]);
   const duration = results.frames.length
@@ -57,19 +67,43 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
 
   useImperativeHandle(ref, () => ({
     seekTo: (t: number, andPlay = true) => {
-      timeRef.current = Math.max(0, Math.min(duration, t));
+      const newT = Math.max(0, Math.min(duration, t));
+      timeRef.current = newT;
       playingRef.current = andPlay;
       setPlaying(andPlay);
+      const v = videoRef.current;
+      if (v) {
+        v.currentTime = newT;
+        if (andPlay) v.play().catch(() => {});
+        else v.pause();
+      }
     },
   }));
 
   const frameAt = useCallback(
     (t: number): PoseFrame => {
-      const { frames, fps } = results;
-      const idx = Math.min(frames.length - 1, Math.max(0, Math.floor(t * fps)));
-      const a = frames[idx];
-      const b = frames[Math.min(frames.length - 1, idx + 1)];
-      const k = Math.min(1, Math.max(0, (t - a.t) * fps));
+      const { frames } = results;
+      if (!frames.length) return { t, pts: [] };
+
+      // clamp to the detection range — if the climber wasn't in frame yet (start)
+      // or has left (end / grabbed the phone), hold at the nearest known pose
+      if (t <= frames[0].t) return frames[0];
+      if (t >= frames[frames.length - 1].t) return frames[frames.length - 1];
+
+      // binary search on actual frame timestamps — correct even when frames are
+      // dropped (no detection) at the start, end, or mid-clip
+      let lo = 0, hi = frames.length - 2;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (frames[mid].t <= t) lo = mid;
+        else hi = mid - 1;
+      }
+
+      const a = frames[lo];
+      const b = frames[lo + 1];
+      const span = b.t - a.t;
+      const k = span > 0 ? (t - a.t) / span : 0;
+
       return {
         t,
         pts: a.pts.map((p, i) => ({
@@ -94,9 +128,9 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
       bg0: css("--paper-deep") || "#ebe3cf",
       bg1: css("--card") || "#faf7ee",
       line: css("--line") || "#d9d0b8",
-      chalk: css("--ink") || "#1c1914", // skeleton ink
+      chalk: css("--ink") || "#1c1914",
       dim: css("--ink-faint") || "#9a917d",
-      ember: css("--red") || "#c0301c", // route + COM markings
+      ember: css("--red") || "#c0301c",
       emberHot: css("--red-deep") || "#8f2212",
     };
 
@@ -115,16 +149,31 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
       const dt = (now - last) / 1000;
       last = now;
 
-      if (playingRef.current) {
-        timeRef.current += dt;
-        if (timeRef.current >= duration) {
-          timeRef.current = compact ? 0 : duration; // hero loops, results page stops
-          if (!compact) {
-            playingRef.current = false;
-            setPlaying(false);
+      const isOverlay = modeRef.current === "overlay";
+
+      if (isOverlay && videoRef.current) {
+        // video is the time source in overlay mode
+        timeRef.current = videoRef.current.currentTime;
+        if (playingRef.current && timeRef.current >= duration) {
+          timeRef.current = compact ? 0 : duration;
+          playingRef.current = false;
+          setPlaying(false);
+          videoRef.current.pause();
+          if (compact) videoRef.current.currentTime = 0;
+        }
+      } else {
+        if (playingRef.current) {
+          timeRef.current += dt;
+          if (timeRef.current >= duration) {
+            timeRef.current = compact ? 0 : duration;
+            if (!compact) {
+              playingRef.current = false;
+              setPlaying(false);
+            }
           }
         }
       }
+
       const t = timeRef.current;
 
       // throttle React state updates to ~8/s
@@ -139,49 +188,69 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
       const w = canvas.width;
       const h = canvas.height;
       if (w === 0 || h === 0) return;
-      const px = (n: number) => n * w;
-      const py = (n: number) => n * h;
-      const s = Math.min(w, h); // scale unit for strokes
 
-      // ── wall ──
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, colors.bg1);
-      grad.addColorStop(1, colors.bg0);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      // plywood panel seams
-      ctx.strokeStyle = colors.line;
-      ctx.lineWidth = Math.max(1, s * 0.002);
-      const seamR = rng(climb.seed * 3 + 1);
-      for (let i = 0; i < 3; i++) {
-        const x = px(0.18 + seamR() * 0.64);
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-        ctx.stroke();
+      // in overlay mode, map [0,1] onto the letterboxed video rectangle so
+      // keypoints align with the actual pixels shown by object-contain
+      let px: (n: number) => number;
+      let py: (n: number) => number;
+      if (isOverlay && videoRef.current) {
+        const { x0, y0, rw, rh } = containRect(
+          videoRef.current.videoWidth,
+          videoRef.current.videoHeight,
+          w, h
+        );
+        px = (n) => x0 + n * rw;
+        py = (n) => y0 + n * rh;
+      } else {
+        px = (n) => n * w;
+        py = (n) => n * h;
       }
-      // t-nut grid
-      ctx.fillStyle = colors.line;
-      for (let gx = 0.05; gx < 1; gx += 0.075) {
-        for (let gy = 0.04; gy < 1; gy += 0.075) {
+
+      const s = Math.min(w, h);
+
+      if (isOverlay) {
+        // transparent canvas — real video shows through
+        ctx.clearRect(0, 0, w, h);
+      } else {
+        // ── wall ──
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, colors.bg1);
+        grad.addColorStop(1, colors.bg0);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = Math.max(1, s * 0.002);
+        const seamR = rng(climb.seed * 3 + 1);
+        for (let i = 0; i < 3; i++) {
+          const x = px(0.18 + seamR() * 0.64);
           ctx.beginPath();
-          ctx.arc(px(gx), py(gy), s * 0.0035, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+        ctx.fillStyle = colors.line;
+        for (let gx = 0.05; gx < 1; gx += 0.075) {
+          for (let gy = 0.04; gy < 1; gy += 0.075) {
+            ctx.beginPath();
+            ctx.arc(px(gx), py(gy), s * 0.0035, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // ── holds ──
+        for (const hold of holds) {
+          drawHold(ctx, hold, px, py, s, hold.onRoute ? colors.ember : colors.dim, hold.onRoute);
         }
       }
 
-      // ── holds ──
-      for (const hold of holds) {
-        drawHold(ctx, hold, px, py, s, hold.onRoute ? colors.ember : colors.dim, hold.onRoute);
-      }
-
-      // ── COM trail — drawn like the dashed route line on a printed topo ──
+      // ── COM trail ──
       const frame = frameAt(t);
-      ctx.strokeStyle = colors.ember;
-      ctx.globalAlpha = 0.5;
+      const trailColor = isOverlay ? "rgba(255,80,60,0.7)" : colors.ember;
+      ctx.strokeStyle = trailColor;
+      ctx.globalAlpha = isOverlay ? 0.75 : 0.5;
       ctx.setLineDash([s * 0.012, s * 0.009]);
-      ctx.lineWidth = Math.max(1, s * 0.003);
+      ctx.lineWidth = Math.max(1.5, s * (isOverlay ? 0.005 : 0.003));
       ctx.beginPath();
       const step = Math.max(1, Math.floor(results.fps / 5));
       let started = false;
@@ -201,34 +270,54 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
       ctx.globalAlpha = 1;
 
       // ── skeleton ──
-      ctx.lineWidth = Math.max(1.5, s * 0.006);
+      const boneColor = isOverlay ? "rgba(255,255,255,0.9)" : colors.chalk;
+      const jointFill = isOverlay ? "rgba(255,255,255,0.85)" : colors.chalk;
+      const endFill = isOverlay ? "rgba(255,100,80,0.95)" : colors.emberHot;
+
+      ctx.lineWidth = Math.max(1.5, s * (isOverlay ? 0.007 : 0.006));
       ctx.lineCap = "round";
-      ctx.strokeStyle = colors.chalk;
+
+      // bones — skip or fade based on endpoint confidence (c field = visibility score)
       for (const [a, b] of BONES) {
+        const conf = Math.min(frame.pts[a].c, frame.pts[b].c);
+        if (conf < 0.15) continue; // both endpoints lost — skip entirely
+        ctx.globalAlpha = Math.max(0.25, conf);
+        ctx.strokeStyle = boneColor;
         ctx.beginPath();
         ctx.moveTo(px(frame.pts[a].x), py(frame.pts[a].y));
         ctx.lineTo(px(frame.pts[b].x), py(frame.pts[b].y));
         ctx.stroke();
       }
-      // head
-      ctx.beginPath();
-      ctx.arc(px(frame.pts[J.head].x), py(frame.pts[J.head].y - 0.012), s * 0.016, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.globalAlpha = 1;
 
-      // joints
+      // head — fade with head landmark confidence
+      const headConf = frame.pts[J.head].c;
+      if (headConf >= 0.15) {
+        ctx.globalAlpha = Math.max(0.25, headConf);
+        ctx.strokeStyle = boneColor;
+        ctx.beginPath();
+        ctx.arc(px(frame.pts[J.head].x), py(frame.pts[J.head].y - 0.012), s * 0.016, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // joints — fade each independently
       for (let i = 0; i < frame.pts.length; i++) {
         const p = frame.pts[i];
+        if (p.c < 0.15) continue;
         const isEnd = [J.l_wrist, J.r_wrist, J.l_ankle, J.r_ankle].includes(i);
-        ctx.fillStyle = isEnd ? colors.emberHot : colors.chalk;
+        ctx.globalAlpha = Math.max(0.25, p.c);
+        ctx.fillStyle = isEnd ? endFill : jointFill;
         const r = isEnd ? s * 0.008 : s * 0.005;
         ctx.fillRect(px(p.x) - r, py(p.y) - r, r * 2, r * 2);
       }
+      ctx.globalAlpha = 1;
 
       // COM marker
       const com = comOf(frame);
-      ctx.fillStyle = colors.ember;
+      ctx.fillStyle = isOverlay ? "rgba(255,80,60,0.9)" : colors.ember;
       ctx.beginPath();
-      ctx.arc(px(com.x), py(com.y), s * 0.009, 0, Math.PI * 2);
+      ctx.arc(px(com.x), py(com.y), s * (isOverlay ? 0.011 : 0.009), 0, Math.PI * 2);
       ctx.fill();
     };
 
@@ -240,23 +329,58 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
   }, [climb, results, holds, duration, frameAt, compact]);
 
   const toggle = () => {
+    const v = videoRef.current;
     if (!playingRef.current && timeRef.current >= duration) timeRef.current = 0;
     playingRef.current = !playingRef.current;
     setPlaying(playingRef.current);
+    if (v) {
+      if (playingRef.current) {
+        v.currentTime = timeRef.current;
+        v.play().catch(() => {});
+      } else {
+        v.pause();
+      }
+    }
   };
 
   const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const k = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    timeRef.current = k * duration;
-    setDisplayTime(timeRef.current);
+    const t = k * duration;
+    timeRef.current = t;
+    setDisplayTime(t);
+    if (videoRef.current) videoRef.current.currentTime = t;
+  };
+
+  const switchMode = (m: "wire" | "overlay") => {
+    const v = videoRef.current;
+    modeRef.current = m;
+    setMode(m);
+    if (!v) return;
+    if (m === "overlay") {
+      v.currentTime = timeRef.current;
+      if (playingRef.current) v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
   };
 
   return (
     <div className="flex h-full flex-col">
-      <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <div ref={wrapRef} className={`relative min-h-0 flex-1 overflow-hidden${mode === "overlay" ? " bg-black" : ""}`}>
+        {/* video layer — sits behind the canvas in overlay mode */}
+        {videoUrl && (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className={`absolute inset-0 h-full w-full object-contain${mode !== "overlay" ? " hidden" : ""}`}
+            muted
+            playsInline
+            preload="metadata"
+          />
+        )}
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
-        {/* live coaching annotation — a margin note stamped on the plate */}
+        {/* live coaching annotation */}
         {activeFb && (
           <div className="absolute left-3 top-3 max-w-[80%] border border-red/60 bg-card/90 px-3 py-2 backdrop-blur-sm">
             <p className="tag text-red">▲ {activeFb.rule.replace(/_/g, " ")}</p>
@@ -273,7 +397,29 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
       </div>
 
       {!compact && (
-        <div className="flex items-center gap-4 border-t hairline bg-card px-4 py-3">
+        <div className="flex items-center gap-3 border-t hairline bg-card px-4 py-3">
+          {/* view mode toggle — only shown for real climbs with a video */}
+          {videoUrl && (
+            <div className="flex shrink-0 overflow-hidden border hairline">
+              <button
+                onClick={() => switchMode("wire")}
+                className={`tag px-2 py-1 text-xs transition-colors ${
+                  mode === "wire" ? "bg-ink text-paper" : "text-ink-dim hover:text-ink"
+                }`}
+              >
+                wire
+              </button>
+              <button
+                onClick={() => switchMode("overlay")}
+                className={`tag border-l hairline px-2 py-1 text-xs transition-colors ${
+                  mode === "overlay" ? "bg-ink text-paper" : "text-ink-dim hover:text-ink"
+                }`}
+              >
+                overlay
+              </button>
+            </div>
+          )}
+
           <button
             onClick={toggle}
             aria-label={playing ? "Pause" : "Play"}
@@ -297,14 +443,11 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
             }}
             onPointerMove={(e) => e.buttons === 1 && scrub(e)}
           >
-            {/* track */}
             <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 bg-line" />
-            {/* progress */}
             <div
               className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 bg-red"
               style={{ width: `${(displayTime / (duration || 1)) * 100}%` }}
             />
-            {/* feedback markers */}
             {results.feedback.map((f) => (
               <div
                 key={f.id}
@@ -315,7 +458,6 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
                 style={{ left: `${(f.startSec / (duration || 1)) * 100}%` }}
               />
             ))}
-            {/* playhead */}
             <div
               className="absolute top-1/2 h-4 w-[2px] -translate-y-1/2 bg-ink"
               style={{ left: `${(displayTime / (duration || 1)) * 100}%` }}
@@ -331,8 +473,15 @@ const OverlayPlayer = forwardRef<PlayerHandle, Props>(function OverlayPlayer(
   );
 });
 
+function containRect(vw: number, vh: number, cw: number, ch: number) {
+  if (vw === 0 || vh === 0) return { x0: 0, y0: 0, rw: cw, rh: ch };
+  const scale = Math.min(cw / vw, ch / vh);
+  const rw = vw * scale;
+  const rh = vh * scale;
+  return { x0: (cw - rw) / 2, y0: (ch - rh) / 2, rw, rh };
+}
+
 function comOf(frame: PoseFrame) {
-  // hips weighted heavier than shoulders — crude segment-mass weighting
   const x =
     (frame.pts[J.l_hip].x + frame.pts[J.r_hip].x) * 0.3 +
     (frame.pts[J.l_shoulder].x + frame.pts[J.r_shoulder].x) * 0.2;

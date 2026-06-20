@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api } from "@/lib/mockApi";
+import { api } from "@/lib/api";
 import { Climb, ClimbResults, FeedbackItem } from "@/lib/types";
 import Protected from "@/components/Protected";
 import ProcessingTimeline from "@/components/ProcessingTimeline";
@@ -132,7 +132,16 @@ export default function ClimbPage() {
               <figure>
                 <div className="flex h-[520px] flex-col border border-ink/70 bg-card p-2 shadow-[6px_6px_0_rgba(28,25,20,0.08)] lg:h-[640px]">
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden border hairline">
-                    <OverlayPlayer ref={playerRef} climb={climb} results={results} />
+                    <OverlayPlayer
+                      ref={playerRef}
+                      climb={climb}
+                      results={results}
+                      videoUrl={
+                        process.env.NEXT_PUBLIC_API_URL && !climb.isDemo
+                          ? `${process.env.NEXT_PUBLIC_API_URL}/climbs/${climb.id}/video`
+                          : undefined
+                      }
+                    />
                   </div>
                 </div>
                 <figcaption className="caption mt-2 flex justify-between text-sm">

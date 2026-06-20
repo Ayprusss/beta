@@ -1,0 +1,15 @@
+# Dev infrastructure. Today: just Redis for the RQ job queue.
+#   docker compose -f infra/docker-compose.yml up -d
+# API + worker run on the host (they need the local venv with mediapipe);
+# Supabase config lands here when real persistence/auth is wired.
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"  # host 6380: 6379 is commonly taken by other local redis instances
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+volumes:
+  redis-data:

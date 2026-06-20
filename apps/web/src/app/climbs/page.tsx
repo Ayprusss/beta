@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/mockApi";
+import { api } from "@/lib/api";
 import { Climb } from "@/lib/types";
 import Protected from "@/components/Protected";
 import ClimbCard from "@/components/ClimbCard";
@@ -43,7 +43,7 @@ export default function ClimbsPage() {
         <div className="print-rule mt-6" />
 
         {climbs === null ? (
-          <p className="tag mt-16 text-ink-faint">loading…</p>
+          <p className="tag mt-16 text-ink-faint">loadingâ€¦</p>
         ) : climbs.length === 0 ? (
           <div className="panel mt-12 p-12 text-center">
             <p className="display text-3xl text-ink">Blank pages</p>

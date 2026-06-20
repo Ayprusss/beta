@@ -29,37 +29,45 @@ Browser polls → results page replays skeleton overlay + shows timestamped tips
 keypoints. Feedback is cheap and changes constantly → always re-runnable from cached
 keypoints. Never recompute pose to tweak a rule.
 
-## Quick start (the ML sandbox, no web stack needed yet)
+## Quick start (ML sandbox only — no web stack)
 ```bash
 python -m venv .venv && .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 python notebooks/01_run_pose.py path/to/your_climb.mp4
 ```
-This runs pose on a real video and dumps keypoints — your first end-to-end signal.
+Dumps keypoints to `out/<stem>.keypoints.json`. First end-to-end signal.
 
-## Quick start (the web app, mock data)
+## Quick start (full stack)
 ```bash
-cd apps/web
-npm install
-npm run dev          # http://localhost:3000
+# Redis
+docker compose -f infra/docker-compose.yml up -d
+
+# API (port 8000)
+.venv\Scripts\python.exe -m uvicorn services.api.main:app --port 8000 --reload
+
+# Worker (separate terminal)
+.venv\Scripts\python.exe -m services.worker.run_worker
+
+# Web (port 3000) — set NEXT_PUBLIC_API_URL=http://localhost:8000 in apps/web/.env.local
+cd apps/web && npm run dev
 ```
-The full v1 flow is demoable today against a mock data layer: sign-in (stubbed),
-upload, simulated pipeline, and a canvas keypoint-replay report. Swap points for
-the real backend are marked in `src/lib/mockApi.ts` (API) and `src/lib/auth.tsx`
-(Google OAuth via Supabase).
+Upload a real video at `http://localhost:3000/upload`. Results appear in the logbook once the worker finishes.
 
 ## Repo layout
 ```
-apps/web/         🟢 Next.js frontend (upload, results, overlay) — BUILT, runs on mock data
-services/api/     FastAPI: jobs, presigned URLs, auth                [later]
-services/worker/  RQ worker entrypoint                               [later]
-ml/pose/          🟢 PoseEstimator interface + MediaPipe impl
-ml/io/            🟢 frame extraction, results serialization
-ml/features/      🔵 smoothing (One-Euro), normalization, biomechanics
+apps/web/         🟢 Next.js frontend — upload, logbook, skeleton replay, coaching notes
+services/api/     🟢 FastAPI: upload endpoint, job queue, climb list/results
+services/worker/  🟢 RQ worker: pose → smooth → features → rules → results.json
+services/storage  🟢 disk-backed climb store (data/climbs/<id>/)
+ml/pose/          🟢 PoseEstimator interface + MediaPipe Tasks API impl
+ml/io/            🟢 frame extraction, keypoint loader
+ml/features/      🔵 smoothing (One-Euro), biomechanics (COM, angles, base-of-support)
 ml/feedback/      🔵 the coaching rule engine
-notebooks/        🔵 your ML learning sandbox — prototype here first
+notebooks/        ML prototyping sandbox
 tests/            unit tests on synthetic keypoint sequences
-infra/            docker-compose (redis, worker, api), supabase config
+infra/            docker-compose (Redis on port 6380)
+data/climbs/      uploaded video + cached keypoints + results per climb (gitignored)
+models/           downloaded MediaPipe .task bundles (gitignored)
 ```
 
 ## Your learning path

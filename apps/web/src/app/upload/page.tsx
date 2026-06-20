@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/mockApi";
+import { api } from "@/lib/api";
 import Protected from "@/components/Protected";
 
 const GRADES = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8+", "V?"];
@@ -26,7 +26,7 @@ export default function UploadPage() {
       return;
     }
     if (f.size > 500 * 1024 * 1024) {
-      setError("Over 500 MB — trim the clip to just the attempt.");
+      setError("Over 500 MB â€” trim the clip to just the attempt.");
       return;
     }
     setFile(f);
@@ -80,7 +80,7 @@ export default function UploadPage() {
                 <>
                   <p className="display text-3xl text-moss">{file.name}</p>
                   <p className="tag mt-2 text-ink-faint">
-                    {(file.size / 1024 / 1024).toFixed(1)} mb · click to swap
+                    {(file.size / 1024 / 1024).toFixed(1)} mb Â· click to swap
                   </p>
                 </>
               ) : (
@@ -89,7 +89,7 @@ export default function UploadPage() {
                     Drop the footage here
                   </span>
                   <p className="tag mt-3 text-ink-faint">
-                    mp4 / mov · max 500 mb · one attempt per clip
+                    mp4 / mov Â· max 500 mb Â· one attempt per clip
                   </p>
                 </>
               )}
@@ -136,11 +136,11 @@ export default function UploadPage() {
               disabled={!file || busy}
               className="mt-9 w-full bg-ink px-6 py-4 font-medium text-paper transition-colors hover:bg-red-deep disabled:cursor-not-allowed disabled:bg-line disabled:text-ink-faint"
             >
-              {busy ? "Uploading…" : "Send it to the queue →"}
+              {busy ? "Uploadingâ€¦" : "Send it to the queue â†’"}
             </button>
           </div>
 
-          {/* filming tips — a margin note */}
+          {/* filming tips â€” a margin note */}
           <aside className="h-fit border hairline bg-card p-6 shadow-[4px_4px_0_rgba(28,25,20,0.07)]">
             <p className="tag text-ochre">before you upload</p>
             <h2 className="display mt-2 text-2xl text-ink">
@@ -150,11 +150,11 @@ export default function UploadPage() {
               {[
                 ["Static camera", "Tripod or propped phone. Panning footage ruins pose tracking."],
                 ["Whole body in frame", "Head to toes for the entire attempt, including the start."],
-                ["Side or ¾ angle", "Straight-on hides hip distance; side view reveals it."],
+                ["Side or Â¾ angle", "Straight-on hides hip distance; side view reveals it."],
                 ["One attempt per clip", "Trim dead time. The pipeline reads everything you send."],
               ].map(([k, v]) => (
                 <li key={k} className="flex gap-3">
-                  <span className="mt-0.5 text-xs text-red">▲</span>
+                  <span className="mt-0.5 text-xs text-red">â–²</span>
                   <span>
                     <strong className="font-medium text-ink">{k}.</strong> {v}
                   </span>
@@ -165,7 +165,7 @@ export default function UploadPage() {
               href="/guide"
               className="caption mt-6 inline-block border-b border-ink-faint pb-0.5 transition-colors hover:border-red hover:text-red"
             >
-              the full film guide →
+              the full film guide â†’
             </Link>
           </aside>
         </div>
