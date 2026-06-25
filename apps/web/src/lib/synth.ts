@@ -234,6 +234,8 @@ interface RuleTemplate {
   title: string;
   severity: FeedbackItem["severity"];
   estimated: boolean;
+  /** Defaults to "fault"; set "move" for a recognised move type (e.g. a dyno). */
+  kind?: FeedbackItem["kind"];
   detail: (t0: string, t1: string) => string;
 }
 
@@ -352,6 +354,7 @@ function mkItem(
     startSec: Math.round(t0 * 10) / 10,
     endSec: Math.round(t1 * 10) / 10,
     estimated: tpl.estimated,
+    kind: tpl.kind ?? "fault",
   };
 }
 

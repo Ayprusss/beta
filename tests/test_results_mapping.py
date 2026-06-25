@@ -6,8 +6,14 @@ replay breaks.
 import pytest
 
 from ml.pose import FramePose, Keypoint
+from ml.feedback import FeedbackItem
 from ml.features import biomechanics as bio
-from services.worker.results import JOINT_INDICES, build_results
+from services.worker.results import (
+    JOINT_INDICES,
+    RULE_TITLES,
+    _map_feedback,
+    build_results,
+)
 
 FPS = 15.0
 
@@ -41,6 +47,8 @@ def test_shape_matches_web_contract():
     assert len(f0["pts"]) == len(JOINT_INDICES) == 13
     assert set(f0["pts"][0]) == {"x", "y", "c"}
     assert set(res["stats"]) == {"moves", "pauseSec", "bentArmPct", "fluidity"}
+    # every feedback item carries `kind` — the required-field web contract
+    assert all("kind" in item for item in res["feedback"])
 
 
 def test_feedback_mapping_severity_and_estimated():
@@ -54,6 +62,27 @@ def test_feedback_mapping_severity_and_estimated():
     assert item["estimated"] is True
     assert item["endSec"] > item["startSec"]
     assert item["title"] == "Long pause"
+
+
+def test_map_feedback_forwards_kind_and_dyno_title():
+    # A recognised move and a fault, mapped together. kind must survive the
+    # API boundary so the web app can acknowledge moves instead of flagging them.
+    items = [
+        FeedbackItem(
+            start_s=1.0, end_s=1.4, code="DYNO", message="nice dynamic move",
+            severity="info", confidence=0.7, kind="move",
+        ),
+        FeedbackItem(
+            start_s=2.0, end_s=3.5, code="BENT_ARMS", message="bent arm hang",
+            severity="suggestion", confidence=0.5,  # kind defaults to "fault"
+        ),
+    ]
+    dyno, bent = _map_feedback(items)
+
+    assert dyno["kind"] == "move"
+    assert dyno["title"] == "Dynamic move"  # nicer than the "Dyno" title() fallback
+    assert RULE_TITLES["DYNO"] == "Dynamic move"
+    assert bent["kind"] == "fault"  # the dataclass default forwards through unchanged
 
 
 def test_stats_reflect_motion():

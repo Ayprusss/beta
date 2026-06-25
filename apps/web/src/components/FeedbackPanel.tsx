@@ -9,6 +9,10 @@ const SEV_STYLE: Record<Severity, { chip: string; label: string }> = {
   info: { chip: "border border-line text-ink-dim", label: "note" },
 };
 
+// A recognised move (e.g. a dyno) is an acknowledgement, not a fault — wear the
+// moss accent rather than the red/ochre route-marking palette that flags errors.
+const MOVE_STYLE = { chip: "bg-moss text-paper", label: "nice move" };
+
 export default function FeedbackPanel({
   items,
   activeId,
@@ -32,7 +36,8 @@ export default function FeedbackPanel({
   return (
     <ol className="space-y-3">
       {items.map((f, i) => {
-        const sev = SEV_STYLE[f.severity];
+        const isMove = f.kind === "move";
+        const tag = isMove ? MOVE_STYLE : SEV_STYLE[f.severity];
         const active = f.id === activeId;
         return (
           <li key={f.id}>
@@ -40,7 +45,7 @@ export default function FeedbackPanel({
               onClick={() => onJump(f)}
               className={`group block w-full border p-4 text-left transition-colors ${
                 active
-                  ? "border-red bg-card"
+                  ? `${isMove ? "border-moss" : "border-red"} bg-card`
                   : "hairline bg-card hover:border-ink-faint"
               }`}
             >
@@ -48,10 +53,16 @@ export default function FeedbackPanel({
                 <span className="caption text-sm">
                   {String(i + 1).padStart(2, "0")}.
                 </span>
-                <span className={`tag shrink-0 px-1.5 py-0.5 ${sev.chip}`}>
-                  {sev.label}
+                <span className={`tag shrink-0 px-1.5 py-0.5 ${tag.chip}`}>
+                  {tag.label}
                 </span>
-                <span className="tag ml-auto shrink-0 text-red transition-colors group-hover:text-red-deep">
+                <span
+                  className={`tag ml-auto shrink-0 transition-colors ${
+                    isMove
+                      ? "text-moss"
+                      : "text-red group-hover:text-red-deep"
+                  }`}
+                >
                   {formatTime(f.startSec)}–{formatTime(f.endSec)} ▸
                 </span>
               </div>

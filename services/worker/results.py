@@ -29,6 +29,7 @@ RULE_TITLES = {
     "BENT_ARMS": "Bent-arm hanging",
     "HESITATION": "Long pause",
     "BARN_DOOR": "Barn-door swing",
+    "DYNO": "Dynamic move",
 }
 
 MOVE_SPEED = 0.06   # COM speed (units/s) above this = executing a move
@@ -79,6 +80,7 @@ def _map_feedback(items: List[FeedbackItem]) -> list[dict]:
             "startSec": round(it.start_s, 2),
             "endSec": round(it.end_s, 2),
             "estimated": True,  # geometric estimation from one camera, never measurement
+            "kind": it.kind,    # "move" | "fault" — lets the UI distinguish recognised moves
         }
         for i, it in enumerate(items)
     ]

@@ -68,8 +68,6 @@ class FeedbackItem:
     severity: str      # "info" | "suggestion" | "warning"
     confidence: float  # 0..1 — be honest; geometric estimates are not certainties
     # "fault" = a technique error | "move" = a recognized move type (e.g. a dyno).
-    # internal only — not yet forwarded to the API; wiring it into _map_feedback +
-    # the TS FeedbackItem type is a follow-up (separate ticket).
     kind: str = "fault"
 
 
