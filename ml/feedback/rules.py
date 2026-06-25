@@ -67,7 +67,10 @@ class FeedbackItem:
     message: str       # the human-facing coaching tip
     severity: str      # "info" | "suggestion" | "warning"
     confidence: float  # 0..1 — be honest; geometric estimates are not certainties
-    kind: str = "fault"  # "fault" = a technique error | "move" = a recognized move type (e.g. a dyno)
+    # "fault" = a technique error | "move" = a recognized move type (e.g. a dyno).
+    # internal only — not yet forwarded to the API; wiring it into _map_feedback +
+    # the TS FeedbackItem type is a follow-up (separate ticket).
+    kind: str = "fault"
 
 
 def _windows(
@@ -101,6 +104,8 @@ def _windows(
         else:
             merged.append(run)
 
+    # max_duration_s filters post-merge: two windows < _MERGE_GAP_S apart merge
+    # first, then may be dropped together for exceeding max.
     return [
         (i0, i1)
         for i0, i1 in merged
