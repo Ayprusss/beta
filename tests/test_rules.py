@@ -9,6 +9,7 @@ import pytest
 from ml.pose import FramePose, Keypoint
 from ml.features import biomechanics as bio
 from ml.feedback import analyze
+from ml.feedback.rules import DYNO_MAX_S, DYNO_MIN_S
 
 FPS = 15.0
 
@@ -116,6 +117,70 @@ def test_static_hang_outside_base_never_fires():
     # codifies the milestone-3 finding: hanging outside the base is normal on a wall
     frames = [_body(i, trunk_x=0.85) for i in range(90)]
     assert "BARN_DOOR" not in _codes(analyze(frames))
+
+
+def test_dyno_fires_on_explosive_upward_spike():
+    # gentle climb, then a ~0.5s explosive upward COM launch, then settle.
+    # With this _body, the trusted segments give COM.y = trunk_y - const, so the
+    # COM rises exactly as fast as trunk_y drops (image y grows downward).
+    def y_at(i):
+        if i <= 29:
+            return 0.8 - 0.004 * i             # ~0.06 u/s up — steady climbing
+        if i <= 38:
+            return 0.684 - 0.03 * (i - 29)     # ~0.45 u/s up — the launch
+        return 0.414 - 0.004 * (i - 38)        # settle, continuous at i=38
+    frames = [_body(i, trunk_y=y_at(i)) for i in range(90)]
+    items = [it for it in analyze(frames) if it.code == "DYNO"]
+    assert len(items) == 1
+    assert items[0].start_s == pytest.approx(30 / FPS, abs=0.2)
+    assert DYNO_MIN_S <= items[0].end_s - items[0].start_s <= DYNO_MAX_S
+    assert items[0].kind == "move"          # a recognized move, NOT a fault
+    assert items[0].severity == "info"
+    assert 0.0 < items[0].confidence <= 1.0
+
+
+def test_dyno_silent_on_steady_climb():
+    # negative case: steady, unhurried climbing never crosses the speed threshold
+    frames = [_body(i, trunk_y=0.8 - 0.004 * i) for i in range(90)]
+    assert "DYNO" not in _codes(analyze(frames))
+
+
+def test_dyno_brief_spike_below_min_duration_does_not_fire():
+    # lower window edge: an explosive pop lasting < DYNO_MIN_S is a blip, not a dyno
+    def y_at(i):
+        if i <= 29:
+            return 0.8 - 0.004 * i
+        if i <= 33:
+            return 0.684 - 0.03 * (i - 29)     # ~0.13s of launch — too brief
+        return 0.564 - 0.004 * (i - 33)
+    frames = [_body(i, trunk_y=y_at(i)) for i in range(70)]
+    assert "DYNO" not in _codes(analyze(frames))
+
+
+def test_dyno_sustained_fast_above_max_duration_does_not_fire():
+    # upper window edge: fast upward travel held > DYNO_MAX_S is steady fast
+    # climbing, not a single ballistic pop. (trunk_y kept in [0.35, 0.85] so the
+    # shoulders/wrist stay on-screen and the COM segments don't change.)
+    def y_at(i):
+        if i <= 9:
+            return 0.8 - 0.002 * i
+        if i <= 23:
+            return 0.782 - 0.025 * (i - 9)     # ~0.8s of launch — too long
+        return 0.432 - 0.002 * (i - 23)
+    frames = [_body(i, trunk_y=y_at(i)) for i in range(36)]
+    assert "DYNO" not in _codes(analyze(frames))
+
+
+def test_dyno_ignores_downward_drop():
+    # directionality: a fast DOWNWARD COM move (a fall/down-climb) is not a dyno
+    def y_at(i):
+        if i <= 29:
+            return 0.4 + 0.002 * i
+        if i <= 38:
+            return 0.458 + 0.03 * (i - 29)     # ~0.45 u/s DOWN
+        return 0.728 + 0.002 * (i - 38)
+    frames = [_body(i, trunk_y=y_at(i)) for i in range(90)]
+    assert "DYNO" not in _codes(analyze(frames))
 
 
 def test_items_sorted_by_start():
