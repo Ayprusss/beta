@@ -18,6 +18,10 @@ Design principles:
   2026-06-12) climbers hang with COM outside the horizontal foot span in ~75%
   of frames — that's normal on a wall, not a fault. The fault is the *swing*:
   COM crossing outside the base fast. A static hang outside the base never fires.
+- NOT EVERY FINDING IS A FAULT. DYNO recognizes a *move type* — an explosive
+  upward COM launch — rather than an error (see FeedbackItem.kind). Surfacing
+  it lets the coach acknowledge the dyno and give a contextual tip instead of a
+  correction.
 
 Known v1 caveats: HESITATION cannot distinguish over-gripping from deliberate
 route-reading or resting (it says so in its message); thresholds below were
@@ -42,6 +46,16 @@ HESITATION_MIN_S = 2.0       # ...for this long = hesitation/over-gripping
 BARN_DOOR_MARGIN = 0.05      # COM.x must be this far outside the base span
 BARN_DOOR_SPEED = 0.15       # ...moving laterally at least this fast (units/s)
 BARN_DOOR_MIN_S = 0.25       # swings are brief; don't demand a long window
+# DYNO is a *move type*, not a fault: a dyno is ballistic, so the COM rockets
+# UPWARD far faster than steady climbing (which glides at <0.1 units/s — cf.
+# results.py MOVE_SPEED ~0.06). We key on a brief, intense upward velocity spike.
+# The duration is bounded on BOTH ends: too short is jitter/a quick adjustment;
+# longer than ~0.7s is sustained fast climbing, not a single explosive pop (you
+# can't stay launched longer than that). Only the upward axis counts — a fast
+# downward COM drop is a fall or down-climb, not a dyno.
+DYNO_UP_SPEED = 0.3          # upward COM velocity (units/s) above this = explosive
+DYNO_MIN_S = 0.3             # ...sustained at least this long = a real launch
+DYNO_MAX_S = 0.7             # ...but past this it's steady climbing, not a pop
 _MERGE_GAP_S = 0.5           # bridge short mask gaps so one event stays one item
 
 
@@ -49,16 +63,28 @@ _MERGE_GAP_S = 0.5           # bridge short mask gaps so one event stays one ite
 class FeedbackItem:
     start_s: float
     end_s: float
-    code: str          # e.g. "BENT_ARMS", "HESITATION", "BARN_DOOR"
+    code: str          # e.g. "BENT_ARMS", "HESITATION", "BARN_DOOR", "DYNO"
     message: str       # the human-facing coaching tip
     severity: str      # "info" | "suggestion" | "warning"
     confidence: float  # 0..1 — be honest; geometric estimates are not certainties
+    # "fault" = a technique error | "move" = a recognized move type (e.g. a dyno).
+    # internal only — not yet forwarded to the API; wiring it into _map_feedback +
+    # the TS FeedbackItem type is a follow-up (separate ticket).
+    kind: str = "fault"
 
 
-def _windows(mask: np.ndarray, t: np.ndarray, min_duration_s: float) -> list[tuple[int, int]]:
+def _windows(
+    mask: np.ndarray,
+    t: np.ndarray,
+    min_duration_s: float,
+    max_duration_s: float | None = None,
+) -> list[tuple[int, int]]:
     """Indices (i0, i1) of contiguous True runs lasting >= min_duration_s.
 
-    Runs separated by gaps shorter than _MERGE_GAP_S are merged first.
+    Runs separated by gaps shorter than _MERGE_GAP_S are merged first. When
+    max_duration_s is given, runs longer than it are dropped too — useful for
+    rules (e.g. DYNO) where an over-long breach means a different phenomenon
+    than a brief, bounded event.
     """
     runs: list[list[int]] = []
     start = None
@@ -78,7 +104,14 @@ def _windows(mask: np.ndarray, t: np.ndarray, min_duration_s: float) -> list[tup
         else:
             merged.append(run)
 
-    return [(i0, i1) for i0, i1 in merged if t[i1] - t[i0] >= min_duration_s]
+    # max_duration_s filters post-merge: two windows < _MERGE_GAP_S apart merge
+    # first, then may be dropped together for exceeding max.
+    return [
+        (i0, i1)
+        for i0, i1 in merged
+        if t[i1] - t[i0] >= min_duration_s
+        and (max_duration_s is None or t[i1] - t[i0] <= max_duration_s)
+    ]
 
 
 def _coverage(valid: np.ndarray, i0: int, i1: int) -> float:
@@ -167,15 +200,49 @@ def _barn_door(frames: List[FramePose], t: np.ndarray, cx: np.ndarray) -> List[F
     return items
 
 
+def _dyno(frames: List[FramePose], t: np.ndarray, cy: np.ndarray) -> List[FeedbackItem]:
+    # Image y grows downward, so an UPWARD launch is cy DECREASING -> up_speed
+    # is the negated vertical gradient. We never flag the downward direction.
+    up_speed = -np.gradient(cy, t)
+    valid = ~np.isnan(up_speed)
+    mask = valid & (up_speed > DYNO_UP_SPEED)
+    items: List[FeedbackItem] = []
+    for i0, i1 in _windows(mask, t, DYNO_MIN_S, DYNO_MAX_S):
+        items.append(
+            FeedbackItem(
+                start_s=float(t[i0]),
+                end_s=float(t[i1]),
+                code="DYNO",
+                message=(
+                    "Nice dynamic move — your center of mass launches upward fast "
+                    f"here ({t[i1] - t[i0]:.1f}s of explosive travel). On a dyno, "
+                    "commit fully and try to catch the hold at the dead point — the "
+                    "weightless top of your arc — so you can lock it before gravity "
+                    "pulls you back."
+                ),
+                severity="info",
+                confidence=0.7 * _coverage(valid, i0, i1),
+                kind="move",
+            )
+        )
+    return items
+
+
 def analyze(frames: List[FramePose]) -> List[FeedbackItem]:
     """Run the rule set over a smoothed pose sequence and return feedback.
 
     Expects SMOOTHED frames (smoothing.smooth_sequence) in time order — raw
     jitter inflates every velocity-based rule. Returns items sorted by start time.
+    Items may be faults or recognized move types (see FeedbackItem.kind).
     """
     if len(frames) < 2:
         return []
     t = np.array([f.timestamp_s for f in frames])
     cx, cy = _com_series(frames)
-    items = _bent_arms(frames, t) + _hesitation(frames, t, cx, cy) + _barn_door(frames, t, cx)
+    items = (
+        _bent_arms(frames, t)
+        + _hesitation(frames, t, cx, cy)
+        + _barn_door(frames, t, cx)
+        + _dyno(frames, t, cy)
+    )
     return sorted(items, key=lambda i: i.start_s)
