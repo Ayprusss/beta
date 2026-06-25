@@ -35,6 +35,9 @@ export interface Climb {
 
 export type Severity = "major" | "warn" | "info";
 
+/** Whether this item recognises a move type or flags a technique fault. */
+export type FeedbackKind = "move" | "fault";
+
 export interface FeedbackItem {
   id: string;
   rule: string; // e.g. "bent_arms"
@@ -45,6 +48,8 @@ export interface FeedbackItem {
   endSec: number;
   /** True when the value is geometric estimation, not measurement (PLAN.md honesty rule) */
   estimated: boolean;
+  /** "move" = recognised move type (e.g. dyno); "fault" = technique error to correct */
+  kind: FeedbackKind;
 }
 
 /** Normalized image coords: x,y in [0,1], c = confidence */
