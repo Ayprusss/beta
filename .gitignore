@@ -29,7 +29,10 @@ dist/
 .idea/
 .vscode/
 
-# Planning / Claude docs (kept local for now; README.md stays tracked)
-CLAUDE.md
+# Planning / Claude docs (PLAN.md + BREAK.md kept local; CLAUDE.md and README.md tracked)
 PLAN.md
 BREAK.md
+
+# Claude Code local state (.claude/agents/ stays tracked — it's the shared workflow)
+.claude/worktrees/
+.claude/settings.local.json
