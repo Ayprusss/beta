@@ -5,7 +5,7 @@ import random
 import pytest
 
 from ml.pose import FramePose, Keypoint
-from ml.features import smooth_sequence, is_trusted, VISIBILITY_MIN
+from ml.features import smooth_sequence, is_trusted, VISIBILITY_MIN, MAX_JUMP
 
 
 FPS = 15.0
@@ -82,6 +82,46 @@ def test_offscreen_points_hold_last_good_despite_high_visibility():
     # off-screen frames must NOT pass the raw 1.3 through
     assert all(out[i].keypoints[0].x == pytest.approx(0.5, abs=0.01) for i in range(5, 8))
     assert not is_trusted(frames[5].keypoints[0])
+
+
+def test_trusted_but_jumping_landmark_is_gated_to_last_good():
+    # During a fast dyno MediaPipe can report HIGH visibility on coordinates that
+    # are flat wrong — the joint teleports across the frame while looking trusted,
+    # which the One-Euro filter (beta tuned to pass fast motion) does nothing to
+    # stop. The position-delta gate must catch this physically-impossible jump and
+    # hold the joint at its last good position rather than let the skeleton snap.
+    jump = MAX_JUMP + 0.1  # comfortably past the gate, well above any real motion
+    xs = [0.4] * 6 + [0.4 + jump] + [0.42] * 6  # single-frame teleport, then settle
+    frames = _frames_from_xy(xs, [0.5] * 13)    # every frame fully visible (v=1.0)
+    out = smooth_sequence(frames)
+    # the teleport frame is held at the last good x (0.4), NOT the raw 0.4+jump
+    assert out[6].keypoints[0].x == pytest.approx(0.4)
+    assert out[6].keypoints[0].x != pytest.approx(0.4 + jump, abs=0.05)
+    # ...and faded (visibility halved) despite the raw frame being fully visible,
+    # so the renderer signals the (otherwise silent) low confidence
+    assert out[6].keypoints[0].visibility == pytest.approx(0.5)
+    # the gate costs one extra held frame: the frame after a teleport is still
+    # compared against the bad coord, so it too holds last good before resuming
+    assert out[7].keypoints[0].x == pytest.approx(0.4)
+    assert out[7].keypoints[0].visibility == pytest.approx(0.5)
+    # once two consecutive coords agree again, live tracking resumes at full trust
+    assert out[8].keypoints[0].x == pytest.approx(0.42)
+    assert out[8].keypoints[0].visibility == pytest.approx(1.0)
+
+
+def test_fast_but_plausible_motion_passes_the_jump_gate():
+    # A genuine dyno reach advances in small per-frame steps. Each step stays under
+    # MAX_JUMP, so the gate must let the whole move through untouched — the anchor
+    # advances every frame, so cumulative travel across the move is never penalized
+    # even though it sums to far more than MAX_JUMP.
+    step = MAX_JUMP * 0.75  # fast (above typical motion) but each step is plausible
+    xs = [0.1 + step * i for i in range(10)]  # a long, continuous fast ramp
+    frames = _frames_from_xy(xs, [0.5] * 10)
+    out = smooth_sequence(frames, min_cutoff=1.0, beta=1.0)  # production smoothing
+    # nothing is gated: a gated frame would halve visibility, so full vis == passed
+    assert all(f.keypoints[0].visibility == pytest.approx(1.0) for f in out)
+    # and the skeleton genuinely tracks the motion across its full range
+    assert out[-1].keypoints[0].x > out[0].keypoints[0].x + 0.3
 
 
 def test_input_not_mutated_and_z_vis_preserved():
